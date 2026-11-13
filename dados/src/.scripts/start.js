@@ -6,6 +6,7 @@ import path from 'path';
 import { spawn, execSync, execFile } from 'child_process';
 import dotenv from 'dotenv';
 import { sincronizarCodigo } from './git-sync.js';
+import { resolverTokenGit, envComCredencialGit } from './git-auth.js';
 import {
     criarBackupDatabase,
     restaurarBackupDatabase,
@@ -285,7 +286,9 @@ async function checkPrerequisites({ quiet = false } = {}) {
         stdio: 'inherit', 
         shell: true,
         cwd: PROJECT_ROOT,
-        env: { ...process.env }
+        // Credencial do .env para baixar as dependências git PRIVADAS
+        // (baileys, zapo, lizzy-call) — o lock as guarda como git+ssh://.
+        env: envComCredencialGit(resolverTokenGit())
       });
       
       if (!quiet) console.log(`${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);

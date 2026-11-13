@@ -24,6 +24,7 @@ import dotenv from 'dotenv';
 import { gitDependencyDrifts } from './git-drift.js';
 import { sincronizarCodigo } from './git-sync.js';
 import { publicar, resolverToken, mascararToken } from './git-push.js';
+import { resolverTokenGit, envComCredencialGit } from './git-auth.js';
 import {
     DB_DIR,
     criarBackupDatabase,
@@ -180,10 +181,13 @@ async function nodeDeps() {
     }
 
     log('Instalando dependências');
+    // Credencial do .env para as dependências git PRIVADAS (baileys, zapo,
+    // lizzy-call): o lock as guarda como git+ssh://, que sem token dá 403.
+    const envGit = envComCredencialGit(resolverTokenGit());
     try {
-        await execAsync('npm', ['install', '--legacy-peer-deps', '--allow-git=all'], { timeout: 600000 });
+        await execAsync('npm', ['install', '--legacy-peer-deps', '--allow-git=all'], { timeout: 600000, env: envGit });
     } catch {
-        await execAsync('npm', ['install', '--allow-git=all'], { timeout: 600000 });
+        await execAsync('npm', ['install', '--allow-git=all'], { timeout: 600000, env: envGit });
     }
     // O npm NÃO cria `node_modules` quando não há nada a instalar. Exigir o
     // diretório sempre daria um falso "npm install falhou" num projeto sem

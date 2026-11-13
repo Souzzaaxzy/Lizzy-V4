@@ -1,5 +1,47 @@
 # AGENTS.md — LizzyZap / Abyss Bot
 
+## Repos PRIVADOS — npm install com token do `.env` (nov/2026) ✅
+
+Os repos do bot foram deixados **privados** (`baileys`, `zapo` e o próprio
+`LizzyZap`). Isso quebra o `npm install`, porque o `package.json` instala
+dependências **direto do GitHub** e o `package-lock.json` guarda as URLs como
+**`git+ssh://git@github.com/...`** (o npm expande `git+https` → ssh ao escrever o
+lock). SSH sem chave morre com `ssh: not found`; `https` sem token dá `403`.
+
+### Correção
+- **Módulo novo `dados/src/.scripts/git-auth.js`**:
+  - `resolverTokenGit()` — token do `.env` (`GITHUB_PUSH_TOKEN` → `GITHUB_SYNC_TOKEN`
+    → `GITHUB_TOKEN` → `GITHUB_UPLOAD_TOKEN`);
+  - `envComCredencialGit(token)` — devolve uma **cópia** do ambiente com
+    `url.https://<token>@github.com/.insteadOf` para os 5 formatos de URL
+    (`git+ssh://`, `ssh://`, `git+https://`, `https://`, `git@github.com:`),
+    via `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/`GIT_CONFIG_VALUE_n`.
+  - **O token NUNCA é gravado em arquivo** (`~/.gitconfig`, `.npmrc`) — só existe
+    no ambiente do processo do install.
+- Ligado nos 3 pontos que rodam `npm install`: `start.js` (boot),
+  `config.js` (instalação) e `update.js` (`!atualizar`). O fallback `yarn install`
+  também recebe o env.
+
+### `lizzy-call` REMOVIDO (dependência órfã + 404)
+O repo `lizzy-call` foi **deletado** e o pacote **não é importado em lugar
+nenhum** (o `zapo` o substituiu — ver `zapoCall.js`/`vozpMedia.js`). Ele continuava
+no `package.json`, e como o repo virou 404 ele **derrubava o `npm install`
+inteiro**. Removido do `package.json` e do `package-lock.json`.
+
+### `zapo` continua PÚBLICO (limitação do GitHub)
+`zapo` é um **fork** de `vinikjkkj/zapo`; o GitHub recusa
+`Public forks can't be made private` (422). Ficou público. Como é acessível sem
+token, não quebra o install; se quiser fechá-lo, é preciso **desfazer o fork**
+(ou duplicar como repo novo).
+
+### Testes
+- **`tests/git-auth.test.js` — 7 testes / 32 asserções**: ordem do token, os 5
+  formatos cobertos, sem token não configura nada, preserva `GIT_CONFIG_*`
+  pré-existente, não muta o ambiente base, integração dos 3 scripts.
+- **E2E real**: `npm install` de `baileys`+`zapo` (privados) com o token →
+  `292 pacotes`, OK. Sem token → `128`. O install COMPLETO do `package.json`
+  real também passou após remover o `lizzy-call`.
+
 ## `!atualizar push` — PUBLICAR alterações no repo privado via token do `.env` (nov/2026) ✅
 
 Pedido do dono: o repo do bot é **privado**, então o `!atualizar` (que só fazia

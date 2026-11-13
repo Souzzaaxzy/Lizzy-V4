@@ -7,7 +7,13 @@ import { exec, spawn } from 'child_process';
 import readline from 'readline';
 import os from 'os';
 import { promisify } from 'util';
+import dotenv from 'dotenv';
 import { gitDependencyDrifts } from './git-drift.js';
+import { resolverTokenGit, envComCredencialGit } from './git-auth.js';
+
+// Credenciais do .env/ambiente (NUNCA do código) — o npm install precisa delas
+// para baixar as dependências git PRIVADAS (baileys, zapo, lizzy-call).
+dotenv.config({ path: path.join(process.cwd(), '.env'), quiet: true });
 
 const execAsync = promisify(exec);
 
@@ -69,7 +75,7 @@ const DEPENDENCIES_CONFIG = [
     { name: 'yt-dlp', check: 'yt-dlp --version || python3 -m yt_dlp --version || python -m yt_dlp --version', termux: 'pip install -U yt-dlp', win: 'pip install -U yt-dlp', linux: 'python3 -m pip install -U yt-dlp || python -m pip install -U yt-dlp || python3 -m pip install --user -U yt-dlp', mac: 'python3 -m pip install -U yt-dlp' },
 ];
 
-async function runCommandWithSpinner(command, message) {
+async function runCommandWithSpinner(command, message, env = undefined) {
     const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
     let i = 0;
     const interval = setInterval(() => {
@@ -77,7 +83,7 @@ async function runCommandWithSpinner(command, message) {
         i = (i + 1) % spinner.length;
     }, 100);
     try {
-        await execAsync(command, { shell: SystemInfo.isWindows });
+        await execAsync(command, { shell: SystemInfo.isWindows, ...(env ? { env } : {}) });
     } finally {
         clearInterval(interval);
         process.stdout.write('\r' + ' '.repeat(message.length + 5) + '\r');
@@ -292,7 +298,7 @@ async function installNodeDependencies() {
         print.info(`📂 Diretório atual: ${process.cwd()}`);
         print.info('⏳ Executando npm install (isso pode levar alguns minutos)...');
         
-        const { stdout, stderr } = await execAsync('npm install --legacy-peer-deps --allow-git=all 2>&1', { shell: true, timeout: 300000 });
+        const { stdout, stderr } = await execAsync('npm install --legacy-peer-deps --allow-git=all 2>&1', { shell: true, timeout: 300000, env: envComCredencialGit(resolverTokenGit()) });
         if (stdout) print.detail(stdout);
         if (stderr) print.detail(stderr);
         
@@ -306,7 +312,7 @@ async function installNodeDependencies() {
         print.warning(`❌ Falha no NPM: ${npmError.message}`);
         print.info('ℹ️ Tentando fallback para YARN...');
         try {
-            await runCommandWithSpinner('yarn install', 'Executando yarn install...');
+            await runCommandWithSpinner('yarn install', 'Executando yarn install...', envComCredencialGit(resolverTokenGit()));
             if (fsSync.existsSync(nodeModulesPath)) {
                 print.message('✅ Dependências instaladas com sucesso via YARN.');
                 return { name: 'Node Dependencies (yarn)', status: `${colors.green}✅ Instalado com sucesso${colors.reset}` };
@@ -316,7 +322,7 @@ async function installNodeDependencies() {
         }
         print.warning('⚠️ Tentando npm install sem flags...');
         try {
-            await execAsync('npm install --allow-git=all 2>&1', { shell: true, timeout: 300000 });
+            await execAsync('npm install --allow-git=all 2>&1', { shell: true, timeout: 300000, env: envComCredencialGit(resolverTokenGit()) });
             if (fsSync.existsSync(nodeModulesPath)) {
                 print.message('✅ Dependências instaladas com sucesso (fallback).');
                 return { name: 'Node Dependencies', status: `${colors.green}✅ Instalado${colors.reset}` };
