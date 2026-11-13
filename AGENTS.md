@@ -28,11 +28,20 @@ nenhum** (o `zapo` o substituiu — ver `zapoCall.js`/`vozpMedia.js`). Ele conti
 no `package.json`, e como o repo virou 404 ele **derrubava o `npm install`
 inteiro**. Removido do `package.json` e do `package-lock.json`.
 
-### `zapo` continua PÚBLICO (limitação do GitHub)
-`zapo` é um **fork** de `vinikjkkj/zapo`; o GitHub recusa
-`Public forks can't be made private` (422). Ficou público. Como é acessível sem
-token, não quebra o install; se quiser fechá-lo, é preciso **desfazer o fork**
-(ou duplicar como repo novo).
+### `zapo` — fork DESTACADO para poder ficar privado
+`zapo` era um **fork** de `vinikjkkj/zapo`, e o GitHub recusa
+`Public forks can't be made private` (422). Para fechá-lo foi preciso **destacar
+o fork**: clonar um `--mirror` (3 branches + 33 tags), criar um repo privado
+temporário, `git push --mirror`, **deletar o fork** e **renomear** o temporário
+para `zapo`. A URL final (`Souzzaaxzy/zapo`) é a MESMA, então a dependência do
+bot continua válida — verificado com `npm install` real depois (OK). O
+`default_branch` precisou voltar para `master` (o GitHub pôs o branch mais
+recente como default ao recriar). Não havia wiki/PRs/branches protegidas para
+perder.
+
+### Estado final (nov/2026)
+**Todos os 15 repos da conta são privados.** O `npm install` do bot usa o
+`GITHUB_PUSH_TOKEN` do `.env` para baixar `baileys` e `zapo`.
 
 ### Testes
 - **`tests/git-auth.test.js` — 7 testes / 32 asserções**: ordem do token, os 5
