@@ -20,8 +20,10 @@ import { execFile } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import dotenv from 'dotenv';
 import { gitDependencyDrifts } from './git-drift.js';
 import { sincronizarCodigo } from './git-sync.js';
+import { publicar, resolverToken, mascararToken } from './git-push.js';
 import {
     DB_DIR,
     criarBackupDatabase,
@@ -31,6 +33,11 @@ import {
     descartarBackupDatabase
 } from './database-backup.js';
 
+// Credenciais e config vêm do .env/ambiente (NUNCA do código). O `!atualizar`
+// spawna este script com `cwd` na raiz, então o `.env` está ao lado do
+// `package.json` — o mesmo caminho que o `start.js` usa.
+dotenv.config({ path: path.join(process.cwd(), '.env'), quiet: true });
+
 // Origem esperada do CÓDIGO do bot. O padrão é o repositório oficial; um
 // `LIZZY_UPDATE_REMOTE` permite rodar num fork/host próprio sem a validação
 // recusar a origem legítima daquele deploy.
@@ -39,8 +46,15 @@ const REPO_FORK = 'Souzzaaxzy/baileys';
 // de git, e a versão (`1.4.0`) não muda entre commits — o nome do commit é o que
 // diz se a correção está de fato instalada.
 const REPO_MIDIA = 'Souzzaaxzy/zapo';
-const REPO_BOT = process.env.LIZZY_UPDATE_REMOTE || 'Souzzaaxzy/Lizzy-V4';
+const REPO_BOT = process.env.LIZZY_UPDATE_REMOTE || 'Souzzaaxzy/LizzyZap';
 const BRANCH = process.env.LIZZY_UPDATE_BRANCH || 'main';
+
+// Modo do script: `push` PUBLICA as alterações locais; o padrão (pull) traz a
+// `main` remota. O modo vem de `LIZZY_UPDATE_MODE` (o handler do `!atualizar`
+// o define ao spawnar) — nunca de argumento de linha de comando, para o
+// contrato de `npm run update` continuar idêntico.
+const MODO = process.env.LIZZY_UPDATE_MODE === 'push' ? 'push' : 'pull';
+const MENSAGEM_COMMIT = process.env.LIZZY_UPDATE_MESSAGE || '';
 
 const execAsync = (cmd, args = [], opts = {}) => new Promise((resolve, reject) => {
     execFile(cmd, args, { shell: true, timeout: 600000, ...opts }, (error, stdout, stderr) => {
@@ -334,10 +348,60 @@ async function vozIap() {
         log('Aviso: msedge-tts ausente — rode o install das dependencias (npm install) para a voz da IA na call');
     }
 }
+
+// ---------------------------------------------------------------------------
+// Modo PUSH — publica as alterações locais na `main` remota
+// ---------------------------------------------------------------------------
+/**
+ * Publica o estado local no repositório privado usando o token do `.env`.
+ *
+ * O `publicar` (git-push.js) monta a URL autenticada SÓ durante o push e
+ * restaura o remote original depois; aqui só se resolve a credencial e se
+ * traduz o resultado para as linhas `UI:` que o `!atualizar` consome.
+ */
+async function publicarAlteracoes() {
+    const token = resolverToken();
+    log(`[UPDATE] Modo: publicar alterações (push)`);
+    log(`[UPDATE] Credencial: ${mascararToken(token)}`);
+    if (!token) {
+        falhar('CREDENCIAL', { detalhe: 'defina GITHUB_PUSH_TOKEN no .env do servidor para publicar num repositório privado' });
+    }
+
+    const r = await publicar({
+        spawn: spawnGit,
+        branch: BRANCH,
+        repo: REPO_BOT,
+        token,
+        mensagem: MENSAGEM_COMMIT,
+        log,
+        onEtapa: (etapa, dados) => {
+            if (etapa === 'commit') ui('PUSH', dados);
+        }
+    });
+
+    if (!r.ok) {
+        falhar(r.etapa, { detalhe: r.detalhe });
+    }
+
+    ui('PUBLICADO', {
+        repoBot: REPO_BOT,
+        branch: BRANCH,
+        nome: r.nome,
+        arquivos: r.arquivos,
+        nada: Boolean(r.nada)
+    });
+    log(r.nada ? 'Nada para publicar' : 'Alterações publicadas');
+    process.exit(0);
+}
+
 // ---------------------------------------------------------------------------
 // Fluxo principal
 // ---------------------------------------------------------------------------
 async function main() {
+    // O modo `push` PUBLICA as alterações locais (caminho inverso do pull).
+    // Não é destrutivo para o database, então não passa pelo backup/restore.
+    if (MODO === 'push') return publicarAlteracoes();
+
     // ── BACKUP OBRIGATÓRIO DO DATABASE (antes de qualquer coisa destrutiva)
     log('[UPDATE] Backup database iniciado');
     const backup = criarBackupDatabase({ cwd: process.cwd(), dir: DB_DIR });

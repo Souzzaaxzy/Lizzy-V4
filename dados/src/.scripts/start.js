@@ -29,7 +29,7 @@ const isTermux = fsSync.existsSync('/data/data/com.termux');
 dotenv.config({ path: path.join(PROJECT_ROOT, '.env'), quiet: true });
 
 // Mesma origem/branch que o `!atualizar` usa.
-const REPO_SYNC = process.env.LIZZY_UPDATE_REMOTE || 'Souzzaaxzy/Lizzy-V4';
+const REPO_SYNC = process.env.LIZZY_UPDATE_REMOTE || 'Souzzaaxzy/LizzyZap';
 const BRANCH_SYNC = process.env.LIZZY_UPDATE_BRANCH || 'main';
 // Liga por padrao; `LIZZY_SYNC_ON_BOOT=0` desliga.
 const SYNC_NO_BOOT = process.env.LIZZY_SYNC_ON_BOOT !== '0';

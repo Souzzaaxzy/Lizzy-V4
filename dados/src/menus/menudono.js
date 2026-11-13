@@ -185,6 +185,7 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 
 ╭━━━꧁༺ ㅤ⚡ ${boldItalic('MANUTENÇÃO')} ⚡ㅤ ༻꧂━━━╮
 │ 🔄 ${prefix}atualizar
+│ 📤 ${prefix}atualizar push
 │ ♻ ${prefix}reiniciar
 │ ➕ ${prefix}entrar
 │ 🚪 ${prefix}sairgp

@@ -16,7 +16,7 @@
  * Sem cache (o módulo original também não tinha). Timeout via AbortController (25s).
  */
 
-const LYRICS_UA = 'Lizzy-V4 AbyssBot (https://github.com/Souzzaaxzy/Lizzy-V4)';
+const LYRICS_UA = 'Lizzy-V4 AbyssBot (https://github.com/Souzzaaxzy/LizzyZap)';
 
 async function fetchWithTimeout(url, opts = {}, ms = 25000) {
   const ctrl = new AbortController();

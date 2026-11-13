@@ -1,4 +1,59 @@
-# AGENTS.md — Lizzy-V4 / Abyss Bot
+# AGENTS.md — LizzyZap / Abyss Bot
+
+## `!atualizar push` — PUBLICAR alterações no repo privado via token do `.env` (nov/2026) ✅
+
+Pedido do dono: o repo do bot é **privado**, então o `!atualizar` (que só fazia
+`fetch + reset --hard`, isto é, PUXAR) não tinha como **enviar** alterações
+locais. Agora `!atualizar push [mensagem]` faz **commit + push** autenticado.
+
+### O que mudou
+- **Módulo novo `dados/src/.scripts/git-push.js`** (`publicar`): stage + commit +
+  push, com o `spawn` do git INJETÁVEL (mesmo contrato do `git-sync.js`), então é
+  testável sem repositório real.
+- **`update.js`**: o modo vem de `LIZZY_UPDATE_MODE=push` (definido pelo handler
+  ao spawnar) — o contrato de `npm run update` continua idêntico. `publicarAlteracoes()`
+  resolve o token e emite as linhas `UI:PUSH`/`UI:PUBLICADO`.
+- **`index.js`**: `!atualizar push [msg]` detecta o subcomando, passa
+  `LIZZY_UPDATE_MODE`/`LIZZY_UPDATE_MESSAGE` no `env` do spawn e, no fim, **retoma
+  a fila sem reiniciar o bot** (o código local não mudou).
+
+### Credencial (repositório privado)
+- Token do **`.env` do servidor**: `GITHUB_PUSH_TOKEN` (fallback:
+  `GITHUB_SYNC_TOKEN` → `GITHUB_TOKEN` → `GITHUB_UPLOAD_TOKEN`). **Nunca** no código.
+- A URL autenticada é montada **só durante o push** e o remote ORIGINAL é
+  restaurado no `finally` — o token **não** fica no `.git/config`. Mesma
+  estratégia do sync no boot (`start.js`).
+- Trava de segurança: se o `.env` aparecer em `git status` (mesmo fora do
+  `.gitignore`), a publicação **aborta** na etapa `SEGURANÇA`. O `.env.example`
+  é liberado de propósito.
+
+### Armadilha medida (custou uma rodada)
+O `spawn` do git no `update.js` roda com **`shell: true`** (contrato do
+`execAsync` de lá). Uma mensagem de commit com espaços passada por `-m` é
+**quebrada pela shell** em vários "pathspec" (`error: pathspec 'e2e' did not
+match...`). Por isso a mensagem vai por **arquivo** (`git commit -F <tmp>`),
+imune ao shell. O e2e com repositório git REAL pegou isso — o teste unitário com
+fake não pegava.
+
+### Outra armadilha: `trim()` do stdout
+O `gitRunner` faz `.trim()` no stdout, então ` M .env` (status porcelain) vira
+`M .env`. O guard de `.env` precisa ser tolerante à coluna de status que some —
+`^\s*[A-Z?!]{1,2}\s+` remove o status sem depender da largura.
+
+### Renomeação do repo (nov/2026)
+`Souzzaaxzy/Lizzy-V4` virou **`Souzzaaxzy/LizzyZap`**. Atualizados os defaults
+hardcoded em `update.js` (`REPO_BOT`), `start.js` (`REPO_SYNC`) e no UA do
+`lyrics.js`; e os cards do `!atualizar` em `index.js`.
+
+### Testes
+- **`tests/update-push.test.js` — 13 testes / 58 asserções** (git fake com
+  estado): árvore suja commita+envia+RESTAURA o remote; árvore limpa não faz
+  nada; `.env` aborta (e variantes); push rejeitado → etapa `PUSH` com
+  orientação de dar pull; sem token não inventa credencial; remote inesperado;
+  git ausente; mensagem sanitizada; token mascarado; `resolverToken`;
+  `remoteComCredencial` (https/ssh/local).
+- **E2E com git REAL** (remote bare em `/tmp`, não versionado): `publicar`
+  e `update.js` no modo push → `exit=0`, commit no remoto, árvore limpa.
 
 ## 🚨 `!atualizar` dizia "100% sincronizado" com o pacote ANTIGO rodando (out/2026) ✅
 

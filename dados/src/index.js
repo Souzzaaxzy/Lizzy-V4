@@ -19223,7 +19223,14 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
             return reply("❌ Script de atualização não encontrado!\n\n📂 Caminho esperado: dados/src/.scripts/update.js");
           }
           // Iniciar atualização diretamente
-          await reply("🚀 *INICIANDO ATUALIZAÇÃO...*\n\n⏸️ Pausando processamento de mensagens...");
+          // Modo PUSH: `!atualizar push [mensagem]` PUBLICA as alterações locais
+          // (commit + push) no repositório privado, em vez de puxar a main.
+          const updateArgs = (q || '').trim();
+          const modoPush = /^(push|publicar|subir|enviar|commit)\b/i.test(updateArgs);
+          const mensagemCommit = modoPush ? updateArgs.split(/\s+/).slice(1).join(' ') : '';
+          await reply(modoPush
+            ? "🚀 *PUBLICANDO ALTERAÇÕES...*\n\n⏸️ Pausando processamento de mensagens..."
+            : "🚀 *INICIANDO ATUALIZAÇÃO...*\n\n⏸️ Pausando processamento de mensagens...");
           // Pausa o processamento de mensagens
           const messageQueueModule = await import('./connect.js');
           if (messageQueueModule.messageQueue && typeof messageQueueModule.messageQueue.pause === 'function') {
@@ -19237,7 +19244,11 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
           const updateProcess = spawn(process.execPath, [updateScriptPath], {
             cwd: pathz.join(__dirname, '..', '..'),
             stdio: ['ignore', 'pipe', 'pipe'],
-            detached: false
+            detached: false,
+            env: {
+              ...process.env,
+              ...(modoPush ? { LIZZY_UPDATE_MODE: 'push', LIZZY_UPDATE_MESSAGE: mensagemCommit } : {})
+            }
           });
           let outputBuffer = '';
           const messagesSent = new Set(); // Rastreia mensagens já enviadas para evitar duplicatas
@@ -19250,6 +19261,8 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
           let uiErro = null;     // { etapa, localNome, remoteNome, detalhe }
           let uiOk = null;       // { repoFork, branch, localNome, remoteNome, jaAtualizado, databaseArquivos }
           let uiBackup = null;   // { count }
+          let uiPush = null;     // { arquivos, nome } — commit criado no modo push
+          let uiPublicado = null; // { repoBot, branch, nome, arquivos, nada }
           const updatesProcessados = new Set();
 
           // Linhas de progresso do script (mantidas: são texto fixo, sem SHA).
@@ -19341,6 +19354,20 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
                 uiBackup = dados;
               } else if (tipo === 'DATABASE') {
                 // validado no card final
+              } else if (tipo === 'PUSH') {
+                uiPush = dados;
+                queueUpdate('push-commit', [
+                  '╭━━━꧁༺ 📤 PUBLICANDO ༻꧂━━━╮',
+                  '┃',
+                  `┃ 📦 Repositório: ${modoPush ? 'Souzzaaxzy/LizzyZap' : 'bot'}`,
+                  `┃ 📝 Commit: ${dados.nome || 'Commit não identificado'}`,
+                  `┃ 📁 Arquivos: ${dados.arquivos ?? 0}`,
+                  '┃',
+                  '┃ ⏳ Enviando para o GitHub...',
+                  '╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯'
+                ].join('\n'));
+              } else if (tipo === 'PUBLICADO') {
+                uiPublicado = dados;
               } else if (tipo === 'ERRO') {
                 uiErro = dados;
               } else if (tipo === 'OK') {
@@ -19363,6 +19390,32 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
           // Quando o processo terminar
           updateProcess.on('close', async (code) => {
             if (code === 0) {
+              // ── Modo PUSH: publica e RETOMA (não reinicia o bot — o código
+              // local não mudou; só foi enviado para o GitHub).
+              if (modoPush) {
+                const pub = uiPublicado || {};
+                const cardPush = [
+                  '╭━━━꧁༺ ✅ 𝐏𝐔𝐁𝐋𝐈𝐂𝐀𝐃𝐎 ༻꧂━━━╮',
+                  '┃',
+                  `┃ 📦 Repositório: ${pub.repoBot || 'Souzzaaxzy/LizzyZap'}`,
+                  `┃ 🌿 Branch: ${pub.branch || 'main'}`,
+                  '┃',
+                  pub.nada ? '┃ ℹ️ Nada para publicar — a árvore já está limpa.' : null,
+                  pub.nada ? null : '┃ 📝 Commit enviado:',
+                  pub.nada ? null : `┃ ${pub.nome || 'Commit não identificado'}`,
+                  pub.nada ? null : '┃',
+                  pub.nada ? null : `┃ 📁 Arquivos publicados: ${pub.arquivos ?? 0}`,
+                  '┃',
+                  '┃ Status: alterações enviadas para o GitHub',
+                  '╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯'
+                ].filter(Boolean).join('\n');
+                await reply(cardPush);
+                if (messageQueueModule.messageQueue && typeof messageQueueModule.messageQueue.resume === 'function') {
+                  messageQueueModule.messageQueue.resume();
+                }
+                return;
+              }
+
               // Card final com os NOMES dos commits (o SHA nunca vai para a UI).
               const ok = uiOk || {};
               const localNome = ok.localNome || uiEstado?.localNome || 'Commit não identificado';
@@ -19370,7 +19423,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
               const card = [
                 '╭━━━꧁༺ ✅ 𝐀𝐓𝐔𝐀𝐋𝐈𝐙𝐀𝐃𝐎 ༻꧂━━━╮',
                 '┃',
-                `┃ 📦 repositório bot: ${ok.repoBot || 'Souzzaaxzy/Lizzy-V4'}`,
+                `┃ 📦 repositório bot: ${ok.repoBot || 'Souzzaaxzy/LizzyZap'}`,
                 `┃ 📦 Repositório fork: ${ok.repoFork || 'Souzzaaxzy/baileys'}`,
                 `┃ 📦 Motor de mídia: ${ok.repoMidia || 'Souzzaaxzy/zapo'}`,
                 `┃ 🌿 Branch: ${ok.branch || 'main'}`,
@@ -19408,7 +19461,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
               const cardErro = [
                 '╭━━━꧁༺ ❌ 𝐀𝐓𝐔𝐀𝐋𝐈𝐙𝐀ÇÃ𝐎 𝐅𝐀𝐋𝐇𝐎𝐔 ༻꧂━━━╮',
                 '┃',
-                `┃ 📦 Repositório bot: ${erro.repoBot || 'Souzzaaxzy/Lizzy-V4'}`,
+                `┃ 📦 Repositório bot: ${erro.repoBot || 'Souzzaaxzy/LizzyZap'}`,
                 `┃ 📦 Repositório fork: ${erro.repoFork || 'Souzzaaxzy/baileys'}`,
                 `┃ 📦 Motor de mídia: ${erro.repoMidia || 'Souzzaaxzy/zapo'}`,
                 `┃ 🌿 Branch: ${erro.branch || 'main'}`,
@@ -24460,6 +24513,9 @@ Use: ${groupPrefix}divulgar
 • Atualizar bot:
   ${groupPrefix}atualizar
   Baixa e aplica atualizações do repositório
+• Publicar alterações:
+  ${groupPrefix}atualizar push [mensagem]
+  Envia as alterações locais para o GitHub (commit + push)
 • Reiniciar:
   ${groupPrefix}reiniciar
   Reinicia o bot completamente
